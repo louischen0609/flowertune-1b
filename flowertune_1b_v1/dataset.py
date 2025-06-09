@@ -50,13 +50,24 @@ def formatting(dataset):
 
 
 def reformat(dataset, llm_task):
-    """Reformat datasets."""
-    dataset = dataset.rename_column("output", "response")
-    if llm_task in ["finance", "code"]:
+    """Reformat datasets to have `instruction`, `input` and `response` columns."""
+
+    # Some datasets (e.g. databricks/databricks-dolly-15k) use "context" as the
+    # input column.
+    if "context" in dataset.column_names:
+        dataset = dataset.rename_column("context", "input")
+
+    # The Code Alpaca dataset uses "output" as the response column.
+    if "output" in dataset.column_names:
+        dataset = dataset.rename_column("output", "response")
+
+    if llm_task in ["finance", "code"] and "input" in dataset.column_names:
         dataset = dataset.map(formatting, remove_columns=["input"])
-    if llm_task == "medical":
+
+    if llm_task == "medical" and "input" in dataset.column_names:
         dataset = dataset.remove_columns(["instruction"])
         dataset = dataset.rename_column("input", "instruction")
+
     return dataset
 
 
