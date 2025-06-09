@@ -54,7 +54,7 @@ def get_model(model_cfg: DictConfig):
     peft_config = LoraConfig(
         r=model_cfg.lora.peft_lora_r,
         lora_alpha=model_cfg.lora.peft_lora_alpha,
-        lora_dropout=0.075,
+        lora_dropout=model_cfg.lora.get("peft_lora_dropout", 0.075),
         task_type="CAUSAL_LM",
     )
 

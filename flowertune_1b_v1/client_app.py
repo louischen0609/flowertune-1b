@@ -2,14 +2,17 @@
 
 import os
 import warnings
+import atexit
 from typing import Dict, Tuple
+
+import wandb
 
 import torch
 from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context
 from flwr.common.config import unflatten_dict
 from flwr.common.typing import NDArrays, Scalar
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from transformers import TrainingArguments
 from trl import SFTTrainer
@@ -29,6 +32,7 @@ from flowertune_1b_v1.models import (
 # Avoid warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 os.environ["RAY_DISABLE_DOCKER_CPU_WARNING"] = "1"
+os.environ["WANDB_DISABLE_SYSTEM"] = "true"
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
@@ -46,15 +50,21 @@ class FlowerClient(NumPyClient):
         formatting_prompts_func,
         data_collator,
         num_rounds,
+        wandb_cfg,
     ):  # pylint: disable=too-many-arguments
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.train_cfg = train_cfg
         self.training_arguments = TrainingArguments(**train_cfg.training_arguments)
+        if wandb_cfg.get("use_wandb", False):
+            self.training_arguments.report_to = "wandb"
+        else:
+            self.training_arguments.report_to = "none"
         self.tokenizer = tokenizer
         self.formatting_prompts_func = formatting_prompts_func
         self.data_collator = data_collator
         self.num_rounds = num_rounds
         self.trainset = trainset
+        self.wandb_cfg = wandb_cfg
 
         # instantiate model
         self.model = get_model(model_cfg)
@@ -103,6 +113,19 @@ def client_fn(context: Context) -> FlowerClient:
     num_rounds = context.run_config["num-server-rounds"]
     cfg = DictConfig(replace_keys(unflatten_dict(context.run_config)))
 
+    # Initialize wandb run for this client
+    if cfg.get("wandb", {}).get("use_wandb", False):
+        run_name_prefix = cfg.wandb.get("run_name_prefix", "client")
+        run_name = f"{run_name_prefix}-{partition_id}"
+        wandb.init(
+            project=cfg.wandb.get("project", "flower-client"),
+            name=run_name,
+            entity=cfg.wandb.get("entity"),
+            config=OmegaConf.to_container(cfg, resolve=True),
+            settings=wandb.Settings(x_disable_stats=True),
+        )
+        atexit.register(wandb.finish)
+
     # Let's get the client partition
     client_trainset = load_data(partition_id, num_partitions, cfg.static.dataset.name)
     (
@@ -119,6 +142,7 @@ def client_fn(context: Context) -> FlowerClient:
         formatting_prompts_func,
         data_collator,
         num_rounds,
+        cfg.get("wandb", {}),
     ).to_client()
 
 
