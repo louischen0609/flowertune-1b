@@ -52,8 +52,8 @@ train.training-arguments.max-steps = 10
 train.training-arguments.save-steps = 1000
 train.training-arguments.save-total-limit = 10
 train.training-arguments.gradient-checkpointing = true
-train.training-arguments.lr-scheduler-type = "cosine"
-strategy.fraction-fit = 0.2
+train.training-arguments.lr-scheduler-type = "constant"
+strategy.fraction-fit = 1.0
 strategy.fraction-evaluate = 0.0
 num-server-rounds = 200
 
@@ -70,6 +70,6 @@ dataset.name = "databricks/databricks-dolly-15k"
 default = "local-simulation"
 
 [tool.flwr.federations.local-simulation]
-options.num-supernodes = 10
-options.backend.client-resources.num-cpus = 6
+options.num-supernodes = 20
+options.backend.client-resources.num-cpus = 1.0
 options.backend.client-resources.num-gpus = 1.0
