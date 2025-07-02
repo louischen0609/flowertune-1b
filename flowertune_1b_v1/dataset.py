@@ -1,9 +1,9 @@
 """flowertune-1B-v1: A Flower / FlowerTune app."""
 
 from flwr_datasets import FederatedDataset
-from flwr_datasets.partitioner import IidPartitioner
+from flwr_datasets.partitioner import IidPartitioner, PathologicalPartitioner
 from transformers import AutoTokenizer
-from trl import DataCollatorForCompletionOnlyLM
+from trl import DataCollatorForCompletionOnlyLM, DataCollatorForLanguageModeling
 
 FDS = None  # Cache FederatedDataset
 
@@ -26,20 +26,28 @@ def formatting_prompts_func(example):
     return output_texts
 
 
-def get_tokenizer_and_data_collator_and_propt_formatting(model_name: str):
+def get_tokenizer_and_data_collator_and_prompt_formatting(model_name: str):
     """Get tokenizer, data_collator and prompt formatting."""
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name, use_fast=True, padding_side="right"
+        model_name, use_fast=True, padding_side="left"
     )
     tokenizer.pad_token = tokenizer.eos_token
     response_template_with_context = "\n### Response:"  # alpaca response tag
     response_template_ids = tokenizer.encode(
         response_template_with_context, add_special_tokens=False
     )[2:]
-    data_collator = DataCollatorForCompletionOnlyLM(
-        response_template_ids, tokenizer=tokenizer
-    )
 
+    #TODO: try which is better DataCollatorForLanguageModeling, DataCollatorForCompletionOnlyLM
+    # data_collator = DataCollatorForCompletionOnlyLM(
+    #     response_template_ids, tokenizser=tokenizer, padding_free=True,
+    # )
+
+
+    #using default data_collator DataCollatorForLanguageModeling
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+    )
     return tokenizer, data_collator, formatting_prompts_func
 
 
@@ -54,19 +62,20 @@ def reformat(dataset, llm_task):
 
     # Some datasets (e.g. databricks/databricks-dolly-15k) use "context" as the
     # input column.
+    #change the "context" to "input"
     if "context" in dataset.column_names:
         dataset = dataset.rename_column("context", "input")
 
-    # The Code Alpaca dataset uses "output" as the response column.
-    if "output" in dataset.column_names:
-        dataset = dataset.rename_column("output", "response")
+    # # The Code Alpaca dataset uses "output" as the response column.
+    # if "output" in dataset.column_names:
+    #     dataset = dataset.rename_column("output", "response")
 
-    if llm_task in ["finance", "code"] and "input" in dataset.column_names:
-        dataset = dataset.map(formatting, remove_columns=["input"])
+    # if llm_task in ["finance", "code"] and "input" in dataset.column_names:
+    #     dataset = dataset.map(formatting, remove_columns=["input"])
 
-    if llm_task == "medical" and "input" in dataset.column_names:
-        dataset = dataset.remove_columns(["instruction"])
-        dataset = dataset.rename_column("input", "instruction")
+    # if llm_task == "medical" and "input" in dataset.column_names:
+    #     dataset = dataset.remove_columns(["instruction"])
+    #     dataset = dataset.rename_column("input", "instruction")
 
     return dataset
 
@@ -76,15 +85,22 @@ def load_data(partition_id: int, num_partitions: int, dataset_name: str):
     # Only initialize `FederatedDataset` once
     global FDS
     if FDS is None:
-        partitioner = IidPartitioner(num_partitions=num_partitions)
+        #partitioner = IidPartitioner(num_partitions=num_partitions)
+
+        # * NOTE: using pathological partitioner for non-iid data
+        partitioner = PathologicalPartitioner(num_partitions=num_partitions,
+                                              seed=42,
+                                              partition_by="category",
+                                              class_assignment_mode="first-deterministic",
+                                              num_classes_per_partition=1,
+        )
         FDS = FederatedDataset(
             dataset=dataset_name,
             partitioners={"train": partitioner},
         )
     client_trainset = FDS.load_partition(partition_id, "train")
-    client_trainset = reformat(client_trainset, llm_task="code")
+    client_trainset = reformat(client_trainset, llm_task="dolly")
     return client_trainset
-
 
 def replace_keys(input_dict, match="-", target="_"):
     """Recursively replace match string with target string in dictionary keys."""

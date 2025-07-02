@@ -20,8 +20,8 @@ from flwr.common.typing import NDArrays
 def cosine_annealing(
     current_round: int,
     total_round: int,
-    lrate_max: float = 0.001,
-    lrate_min: float = 0.0,
+    lrate_max: float = 3e-4,
+    lrate_min: float = 1e-6,
 ) -> float:
     """Implement cosine annealing learning rate schedule."""
     cos_inner = math.pi * current_round / total_round
@@ -32,7 +32,11 @@ def get_model(model_cfg: DictConfig):
     """Load model with appropriate quantization config and other optimizations.
     """
     if model_cfg.quantization == 4:
-        quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4"
+        )
     elif model_cfg.quantization == 8:
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
     else:
@@ -45,6 +49,7 @@ def get_model(model_cfg: DictConfig):
         quantization_config=quantization_config,
         torch_dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
+        attn_implementation="flash_attention_2",
     )
 
     model = prepare_model_for_kbit_training(
@@ -54,7 +59,7 @@ def get_model(model_cfg: DictConfig):
     peft_config = LoraConfig(
         r=model_cfg.lora.peft_lora_r,
         lora_alpha=model_cfg.lora.peft_lora_alpha,
-        lora_dropout=model_cfg.lora.get("peft_lora_dropout", 0.075),
+        lora_dropout=model_cfg.lora.get("peft_lora_dropout", 0.1),
         task_type="CAUSAL_LM",
     )
 

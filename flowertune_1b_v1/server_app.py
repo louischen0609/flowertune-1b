@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 
 from flowertune_1b_v1.models import get_model, get_parameters, set_parameters
 from flowertune_1b_v1.dataset import replace_keys
-from flowertune_1b_v1.strategy import FlowerTuneLlm
+from flwr.server.strategy import FedAvg
 
 
 # Get function that will be executed by the strategy's evaluate() method
@@ -19,7 +19,7 @@ def get_evaluate_fn(model_cfg, save_every_round, total_round, save_path):
     """Return an evaluation function for saving global model."""
 
     def evaluate(server_round: int, parameters, config):
-        # Save model
+        # Save model, save every round and last round
         if server_round != 0 and (
             server_round == total_round or server_round % save_every_round == 0
         ):
@@ -75,7 +75,7 @@ def server_fn(context: Context):
     init_model_parameters = ndarrays_to_parameters(init_model_parameters)
 
     # Define strategy
-    strategy = FlowerTuneLlm(
+    strategy = FedAvg(
         fraction_fit=cfg.strategy.fraction_fit,
         fraction_evaluate=cfg.strategy.fraction_evaluate,
         on_fit_config_fn=get_on_fit_config(save_path),
