@@ -131,6 +131,14 @@ class FlowerClient(NumPyClient):
         results = trainer.train()
         print(f"results: {results}")
 
+        ## if is the first round, need to save the model
+        if current_round == 1:
+            # save_path 是從 server 傳過來的結果目錄 base path
+            save_dir = os.path.join(config["save_path"], f"client/{self.partition_id}")
+            os.makedirs(save_dir, exist_ok=True)  # 確保路徑存在
+            self.model.save_pretrained(save_dir)
+            print(f"Model saved at {save_dir}")
+
         # if self.training_arguments.report_to == "wandb":
         #     wandb.log(
         #         {
