@@ -6,7 +6,8 @@ import atexit
 from typing import Dict, Tuple
 from datetime import datetime
 import wandb
-
+import random
+import numpy as np
 import torch
 from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context
@@ -36,6 +37,17 @@ os.environ["WANDB_DISABLE_SYSTEM"] = "true"
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+def seed_all(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # 多 GPU 時使用
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    
+
 # pylint: disable=too-many-arguments
 # pylint: disable=too-many-instance-attributes
 class FlowerClient(NumPyClient):
@@ -55,6 +67,9 @@ class FlowerClient(NumPyClient):
         num_partitions,
         cfg,
     ):  # pylint: disable=too-many-arguments
+        seed = cfg.get("seed", 42)
+        seed_all(seed)
+
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.train_cfg = train_cfg
         self.training_arguments = TrainingArguments(**train_cfg.training_arguments)
@@ -96,7 +111,6 @@ class FlowerClient(NumPyClient):
                 config=OmegaConf.to_container(self.cfg, resolve=True),
                 settings=wandb.Settings(x_disable_stats=True),
             )
-            # 讓 process 結束時自動關閉 run
             self.wandb_initialized = True
 
         set_parameters(self.model, parameters)
@@ -114,7 +128,7 @@ class FlowerClient(NumPyClient):
         self.training_arguments.output_dir = config["save_path"]
 
         # print training arguments
-        print(f"training arguments: {self.training_arguments}")
+        # print(f"training arguments: {self.training_arguments}")
 
         # Construct trainer
         trainer = SFTTrainer(
@@ -131,12 +145,13 @@ class FlowerClient(NumPyClient):
         results = trainer.train()
         print(f"results: {results}")
 
-        ## if is the first round, need to save the model
+        ## if is the first round, need to save the model , token
+        # print(f"current_round: {current_round}")
         if current_round == 1:
             # save_path 是從 server 傳過來的結果目錄 base path
             save_dir = os.path.join(config["save_path"], f"client/{self.partition_id}")
             os.makedirs(save_dir, exist_ok=True)  # 確保路徑存在
-            self.model.save_pretrained(save_dir)
+            trainer.save_model(save_dir)
             print(f"Model saved at {save_dir}")
 
         # if self.training_arguments.report_to == "wandb":
@@ -146,6 +161,8 @@ class FlowerClient(NumPyClient):
         #         }
         #     )
 
+        if self.wandb_initialized:
+            wandb.finish()
         return (
             get_parameters(self.model),
             len(self.trainset),
@@ -156,6 +173,8 @@ class FlowerClient(NumPyClient):
 def client_fn(context: Context) -> FlowerClient:
     """Create a Flower client representing a single organization."""
     partition_id = context.node_config["partition-id"]
+    ## print partition_id
+    # print(f"partition_id: {partition_id}")
     num_partitions = context.node_config["num-partitions"]
     num_rounds = context.run_config["num-server-rounds"]
     cfg = DictConfig(replace_keys(unflatten_dict(context.run_config))) # this line meaning?

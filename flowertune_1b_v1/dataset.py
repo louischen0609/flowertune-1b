@@ -3,7 +3,8 @@
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner, PathologicalPartitioner
 from transformers import AutoTokenizer
-from trl import DataCollatorForCompletionOnlyLM, DataCollatorForLanguageModeling
+from trl import DataCollatorForCompletionOnlyLM
+from transformers import DataCollatorForLanguageModeling
 
 FDS = None  # Cache FederatedDataset
 
@@ -62,7 +63,7 @@ def reformat(dataset, llm_task):
 
     # Some datasets (e.g. databricks/databricks-dolly-15k) use "context" as the
     # input column.
-    #change the "context" to "input"
+    # *NOTE: change the "context" to "input"
     if "context" in dataset.column_names:
         dataset = dataset.rename_column("context", "input")
 

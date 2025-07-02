@@ -61,6 +61,7 @@ def get_model(model_cfg: DictConfig):
         lora_alpha=model_cfg.lora.peft_lora_alpha,
         lora_dropout=model_cfg.lora.get("peft_lora_dropout", 0.1),
         task_type="CAUSAL_LM",
+        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "down_proj", "up_proj"]
     )
 
     if model_cfg.gradient_checkpointing:

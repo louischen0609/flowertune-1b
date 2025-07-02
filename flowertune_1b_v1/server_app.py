@@ -2,7 +2,9 @@
 
 import os
 from datetime import datetime
-
+import random
+import numpy as np
+import torch
 from flwr.common import Context, ndarrays_to_parameters
 from flwr.common.config import unflatten_dict
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
@@ -11,6 +13,18 @@ from omegaconf import DictConfig
 from flowertune_1b_v1.models import get_model, get_parameters, set_parameters
 from flowertune_1b_v1.dataset import replace_keys
 from flwr.server.strategy import FedAvg
+
+def seed_all(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # 多 GPU 時使用
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    print(f"[INFO] Global seed set to: {seed}")
+
 
 
 # Get function that will be executed by the strategy's evaluate() method
@@ -68,7 +82,8 @@ def server_fn(context: Context):
     # Read from config
     num_rounds = context.run_config["num-server-rounds"]
     cfg = DictConfig(replace_keys(unflatten_dict(context.run_config)))
-
+    seed = cfg.get("seed", 42)
+    seed_all(seed)
     # Get initial model weights
     init_model = get_model(cfg.model)
     init_model_parameters = get_parameters(init_model)
