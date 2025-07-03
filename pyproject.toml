@@ -20,6 +20,7 @@ dependencies = [
     "omegaconf==2.3.0",
     "hf_transfer==0.1.8",
     "wandb",
+    "lm-eval>=0.4.2",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -48,7 +49,7 @@ train.training-arguments.learning-rate = ""
 train.training-arguments.weight-decay = 0.01
 train.training-arguments.per-device-train-batch-size = 2
 train.training-arguments.gradient-accumulation-steps = 8
-train.training-arguments.logging-steps = 10
+train.training-arguments.logging-steps = 1
 train.training-arguments.num-train-epochs = 1
 train.training-arguments.max-steps = -1
 train.training-arguments.save-steps = 10000000
@@ -58,8 +59,16 @@ train.training-arguments.lr-scheduler-type = "constant"
 strategy.fraction-fit = 1.0
 strategy.fraction-evaluate = 0.0
 num-server-rounds = 25
-wandb.use-wandb = false
-wandb.project = "flwr-llama3.2-1b-dolly"
+
+# 添加 MMLU 評估設定
+evaluation.enable-mmlu = true
+evaluation.mmlu-num-fewshot = 5
+evaluation.mmlu-batch-size = "auto"
+evaluation.mmlu-limit = ""  # 設為數字可限制評估樣本數量（用於快速測試），空字串表示無限制
+evaluation.mmlu-tasks-subset = "all"  # 可設為 "stem", "humanities", "social", "other" 或 "all"
+
+wandb.use-wandb = true
+wandb.project = "flwr-llama3.2-1b-path-dolly"
 wandb.run-name-prefix = "client"
 wandb.entity = ""
 seed = 42

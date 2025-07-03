@@ -99,15 +99,16 @@ class FlowerClient(NumPyClient):
         """Implement distributed fit function for a given client."""
         # Initialize wandb run for this client (only once)
         # default name is "client-partition_id"
+        current_round = int(config["current_round"])
         if not self.wandb_initialized and self.wandb_cfg.get("use_wandb", False):
             run_name_prefix = self.wandb_cfg.get("run_name_prefix", "client")
-            run_name = f"{run_name_prefix}-{self.partition_id}"
+            run_name = f"{run_name_prefix}-{self.partition_id}-{current_round}"
             wandb.init(
                 project=self.wandb_cfg.get("project", "flower-fedit-1b"),
                 name=run_name,
                 entity=self.wandb_cfg.get("entity"),
                 group=f"client-{self.partition_id}",   # group is the same as the run name
-                tags=[f"n_partitions={self.num_partitions}"],
+                tags=[f"n_partitions={self.partition_id}"],
                 config=OmegaConf.to_container(self.cfg, resolve=True),
                 settings=wandb.Settings(x_disable_stats=True),
             )
@@ -115,7 +116,7 @@ class FlowerClient(NumPyClient):
 
         set_parameters(self.model, parameters)
 
-        current_round = int(config["current_round"])
+        
         # max learning rate is 3e-4, min learning rate is 1e-6
         new_lr = cosine_annealing(
             int(config["current_round"]),

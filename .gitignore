@@ -1,6 +1,8 @@
 dataset.ipynb
 CLAUDE.md
 results/
+wandb/
+MMLU_EVALUATION_GUIDE.md
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
